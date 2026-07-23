@@ -1,70 +1,56 @@
-/* ==========================================================
-   PITCH BLACK — Anonymous Chat
-   Supabase Realtime + Storage + WebRTC
-   ========================================================== */
+// ==========================================================
+// PITCH BLACK — Anonymous Chat
+// ==========================================================
 
-// ---------- CONFIG ----------
-// Replace with your Supabase project credentials.
-// For production, use Vercel env vars and inject via window.__ENV__ or a small API.
-const SUPABASE_URL = window.__ENV__?.SUPABASE_URL || 'https://YOUR-PROJECT.supabase.co';
-const SUPABASE_ANON_KEY = window.__ENV__?.SUPABASE_ANON_KEY || 'YOUR-ANON-KEY';
+// ⚠️ REPLACE THESE WITH YOUR SUPABASE CREDENTIALS
+const SUPABASE_URL = 'https://YOUR-PROJECT.supabase.co';
+const SUPABASE_ANON_KEY = 'YOUR-ANON-KEY';
 
 const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-// ---------- STATE ----------
 const state = {
   userId: crypto.randomUUID(),
   username: generateUsername(),
   roomId: null,
   channel: null,
-  peers: new Map(),          // userId -> RTCPeerConnection
+  peers: new Map(),
   localStream: null,
-  remoteStream: null,
   mediaRecorder: null,
   recChunks: [],
-  recStart: 0,
   recTimer: null,
 };
 
-const ICE_SERVERS = [
-  { urls: 'stun:stun.l.google.com:19302' },
-  { urls: 'stun:stun1.l.google.com:19302' },
-];
+const ICE_SERVERS = [{ urls: 'stun:stun.l.google.com:19302' }];
 
-// ---------- UTILS ----------
-function $(id) { return document.getElementById(id); }
-function showScreen(id) {
+// --- Utilities ---
+const $ = (id) => document.getElementById(id);
+const showScreen = (id) => {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   $(id).classList.add('active');
-}
-function toast(msg, ms = 2500) {
+};
+const toast = (msg, ms = 2500) => {
   const t = $('toast');
   t.textContent = msg;
   t.classList.remove('hidden');
   clearTimeout(t._t);
   t._t = setTimeout(() => t.classList.add('hidden'), ms);
-}
-function generateUsername() {
-  const adj = ['Silent','Shadow','Midnight','Phantom','Ghost','Velvet','Crimson','Hollow','Wandering','Veiled'];
-  const noun = ['Knight','Rook','Bishop','Pawn','Crown','Mask','Raven','Wolf','Fox','Owl'];
+};
+const generateUsername = () => {
+  const adj = ['Silent','Shadow','Midnight','Phantom','Ghost','Velvet','Hollow','Veiled','Neon','Cyber'];
+  const noun = ['Knight','Rook','Bishop','Pawn','Raven','Wolf','Fox','Owl','Specter','Wraith'];
   return adj[Math.floor(Math.random()*adj.length)] + noun[Math.floor(Math.random()*noun.length)] + Math.floor(Math.random()*99);
-}
-function escapeHtml(s) {
-  return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-}
-function formatTime(s) {
+};
+const escapeHtml = (s) => s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const formatTime = (s) => {
   const m = Math.floor(s/60), sec = Math.floor(s%60);
   return `${m}:${sec.toString().padStart(2,'0')}`;
-}
-function roomSlug(input) {
-  return (input || '').toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').slice(0, 32) || 'room-' + Math.random().toString(36).slice(2, 8);
-}
+};
+const roomSlug = (input) => (input || '').toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').slice(0, 32) || 'room-' + Math.random().toString(36).slice(2, 8);
 
-// ---------- LANDING ----------
+// --- Landing ---
 $('createBtn').onclick = () => {
-  const slug = 'room-' + Math.random().toString(36).slice(2, 8);
-  $('roomInput').value = slug;
-  joinRoom(slug);
+  $('roomInput').value = 'room-' + Math.random().toString(36).slice(2, 8);
+  joinRoom($('roomInput').value);
 };
 $('joinBtn').onclick = () => {
   const slug = roomSlug($('roomInput').value);
@@ -72,43 +58,34 @@ $('joinBtn').onclick = () => {
   joinRoom(slug);
 };
 
-// Auto-join from URL: ?room=xxx
 const urlRoom = new URLSearchParams(location.search).get('room');
 if (urlRoom) { $('roomInput').value = urlRoom; }
 
-// ---------- JOIN ROOM ----------
+// --- Join Room ---
 async function joinRoom(slug) {
   state.roomId = slug;
   $('roomName').textContent = '#' + slug;
   showScreen('chat');
 
-  // Subscribe to realtime channel (broadcast + presence + db changes)
   state.channel = supabase.channel('room:' + slug, {
     config: { broadcast: { self: false }, presence: { key: state.userId } }
   });
 
-  // --- Presence: online users ---
   state.channel.on('presence', { event: 'sync' }, () => {
-    const present = state.channel.presenceState();
-    $('onlineCount').textContent = Object.keys(present).length;
+    $('onlineCount').textContent = Object.keys(state.channel.presenceState()).length;
   });
-  state.channel.on('presence', { event: 'join' }, ({ key, newPresences }) => {
+  state.channel.on('presence', { event: 'join' }, ({ newPresences }) => {
     addSystemMsg(`${newPresences[0]?.username || 'Someone'} joined`);
   });
-  state.channel.on('presence', { event: 'leave' }, ({ key, leftPresences }) => {
+  state.channel.on('presence', { event: 'leave' }, ({ leftPresences }) => {
     addSystemMsg(`${leftPresences[0]?.username || 'Someone'} left`);
-    cleanupPeer(key);
+    cleanupPeer(leftPresences[0]?.userId);
   });
 
-  // --- Broadcast: chat messages ---
   state.channel.on('broadcast', { event: 'chat' }, ({ payload }) => renderMessage(payload));
-
-  // --- Broadcast: typing indicator ---
   state.channel.on('broadcast', { event: 'typing' }, ({ payload }) => {
     if (payload.userId !== state.userId) showTyping(payload.username);
   });
-
-  // --- Broadcast: WebRTC signaling ---
   state.channel.on('broadcast', { event: 'rtc-offer' }, handleOffer);
   state.channel.on('broadcast', { event: 'rtc-answer' }, handleAnswer);
   state.channel.on('broadcast', { event: 'rtc-ice' }, handleIce);
@@ -118,76 +95,51 @@ async function joinRoom(slug) {
 
   await state.channel.subscribe(async (status) => {
     if (status === 'SUBSCRIBED') {
-      await state.channel.track({ userId: state.userId, username: state.username, onlineAt: new Date().toISOString() });
+      await state.channel.track({ userId: state.userId, username: state.username });
       addSystemMsg(`You joined as ${state.username}`);
       loadHistory();
     }
   });
 }
 
-// ---------- MESSAGE HISTORY (optional) ----------
+// --- History ---
 async function loadHistory() {
-  const { data, error } = await supabase
-    .from('messages')
-    .select('*')
-    .eq('room_id', state.roomId)
-    .order('created_at', { ascending: true })
-    .limit(100);
-  if (error) return;
-  (data || []).forEach(renderMessage);
+  const { data } = await supabase.from('messages').select('*').eq('room_id', state.roomId).order('created_at', { ascending: true }).limit(50);
+  if (data) data.forEach(renderMessage);
 }
 
-// ---------- SEND MESSAGE ----------
+// --- Messaging ---
 async function sendMessage(content, type = 'text', mediaUrl = null) {
   const payload = {
-    id: crypto.randomUUID(),
-    userId: state.userId,
-    username: state.username,
-    roomId: state.roomId,
-    content,
-    type,
-    mediaUrl,
-    createdAt: new Date().toISOString(),
+    id: crypto.randomUUID(), userId: state.userId, username: state.username,
+    roomId: state.roomId, content, type, mediaUrl, createdAt: new Date().toISOString(),
   };
-
-  // Persist to DB (for history)
-  if (type !== 'typing') {
-    await supabase.from('messages').insert(payload);
-  }
-
-  // Broadcast live
+  if (type !== 'typing') await supabase.from('messages').insert(payload);
   state.channel.send({ type: 'broadcast', event: 'chat', payload });
 }
 
-// ---------- RENDER MESSAGE ----------
 function renderMessage(m) {
-  if (document.querySelector(`[data-id="${m.id}"]`)) return; // dedupe
+  if (document.querySelector(`[data-id="${m.id}"]`)) return;
   const el = document.createElement('div');
-  el.className = 'msg ' + (m.userId === state.userId ? 'own' : 'other');
+  el.className = 'msg ' + (m.userId === state.userId ? 'own' : (m.type === 'system' ? 'system' : 'other'));
   el.dataset.id = m.id;
 
   let body = '';
-  if (m.userId !== state.userId) body += `<div class="author">${escapeHtml(m.username)}</div>`;
-
+  if (m.userId !== state.userId && m.type !== 'system') body += `<div class="author">${escapeHtml(m.username)}</div>`;
   if (m.type === 'text') body += `<div>${escapeHtml(m.content).replace(/\n/g,'<br>')}</div>`;
   else if (m.type === 'image') body += `<img src="${m.mediaUrl}" alt="image" loading="lazy" />`;
   else if (m.type === 'video') body += `<video src="${m.mediaUrl}" controls playsinline></video>`;
   else if (m.type === 'voice') body += `<audio src="${m.mediaUrl}" controls></audio>`;
+  else if (m.type === 'system') body += escapeHtml(m.content);
 
   el.innerHTML = body;
   $('messages').appendChild(el);
   $('messages').scrollTop = $('messages').scrollHeight;
 }
 
-function addSystemMsg(text) {
-  const el = document.createElement('div');
-  el.className = 'msg system';
-  el.textContent = text;
-  $('messages').appendChild(el);
-  $('messages').scrollTop = $('messages').scrollHeight;
-}
+function addSystemMsg(text) { renderMessage({ id: crypto.randomUUID(), type: 'system', content: text, userId: 'system' }); }
 
-// ---------- COMPOSER ----------
+// --- Composer ---
 const input = $('messageInput');
 input.addEventListener('input', () => {
   input.style.height = 'auto';
@@ -209,19 +161,14 @@ function doSend() {
 
 let typingTimer;
 function showTyping(username) {
-  let el = document.querySelector('.typing');
-  if (!el) {
-    el = document.createElement('div');
-    el.className = 'typing';
-    $('messages').parentNode.insertBefore(el, document.querySelector('.composer'));
-  }
+  const el = $('typingIndicator');
   el.textContent = `${username} is typing...`;
   clearTimeout(typingTimer);
-  typingTimer = setTimeout(() => el.remove(), 2000);
+  typingTimer = setTimeout(() => (el.textContent = ''), 2000);
 }
 
-// ---------- EMOJI PICKER ----------
-const EMOJIS = ['😀','😂','😍','😎','😭','🤔','🙄','😴','🤯','🥳','😱','🤗','😈','👻','💀','🔥','❤️','💔','✨','🎉','👍','👎','🙏','💯','🚀','⭐','🌙','☀️','🎵','🎮','☕','🍕','🍺','🌈','♞','♟','♜','♝','♛','♚'];
+// --- Emoji ---
+const EMOJIS = ['😀','😂','😍','😎','😭','🤔','🙄','😴','🤯','🥳','😱','🤗','😈','👻','💀','🔥','❤️','💔','✨','🎉','👍','👎','🙏','💯','🚀','⭐','🌙','☀️','🎵','🎮','☕','🍕','♞','♟','♜','♝','♛','♚'];
 const picker = $('emojiPicker');
 EMOJIS.forEach(e => {
   const b = document.createElement('button');
@@ -230,18 +177,21 @@ EMOJIS.forEach(e => {
   picker.appendChild(b);
 });
 $('emojiBtn').onclick = () => picker.classList.toggle('hidden');
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('#emojiPicker') && !e.target.closest('#emojiBtn')) picker.classList.add('hidden');
+});
 
-// ---------- FILE UPLOAD (image/video) ----------
+// --- File Upload ---
 $('attachBtn').onclick = () => $('fileInput').click();
 $('fileInput').onchange = async (e) => {
   const file = e.target.files[0];
   if (!file) return;
-  if (file.size > 25 * 1024 * 1024) return toast('Max 25MB');
-
+  if (file.size > 25 * 1024 * 1024) return toast('Max file size is 25MB');
   toast('Uploading...');
+  
   const ext = file.name.split('.').pop();
   const path = `${state.roomId}/${state.userId}-${Date.now()}.${ext}`;
-  const { error } = await supabase.storage.from('chat-media').upload(path, file, { upsert: false });
+  const { error } = await supabase.storage.from('chat-media').upload(path, file);
   if (error) return toast('Upload failed');
 
   const { data } = supabase.storage.from('chat-media').getPublicUrl(path);
@@ -250,7 +200,7 @@ $('fileInput').onchange = async (e) => {
   e.target.value = '';
 };
 
-// ---------- VOICE NOTE ----------
+// --- Voice Note ---
 $('voiceBtn').onclick = async () => {
   if (state.mediaRecorder && state.mediaRecorder.state === 'recording') return;
   try {
@@ -259,24 +209,14 @@ $('voiceBtn').onclick = async () => {
     state.recChunks = [];
     state.recStart = Date.now();
     $('voiceRecorder').classList.remove('hidden');
-    state.recTimer = setInterval(() => {
-      $('recTime').textContent = formatTime((Date.now() - state.recStart) / 1000);
-    }, 500);
+    state.recTimer = setInterval(() => { $('recTime').textContent = formatTime((Date.now() - state.recStart) / 1000); }, 500);
 
-    state.mediaRecorder.ondataavailable = e => state.recChunks.push(e.data);
-    state.mediaRecorder.onstop = async () => {
-      stream.getTracks().forEach(t => t.stop());
-      clearInterval(state.recTimer);
-    };
+    state.mediaRecorder.ondataavailable = (e) => state.recChunks.push(e.data);
+    state.mediaRecorder.onstop = () => { stream.getTracks().forEach(t => t.stop()); clearInterval(state.recTimer); };
     state.mediaRecorder.start();
-  } catch (err) {
-    toast('Mic access denied');
-  }
+  } catch { toast('Mic access denied'); }
 };
-$('cancelRec').onclick = () => {
-  state.mediaRecorder?.stop();
-  $('voiceRecorder').classList.add('hidden');
-};
+$('cancelRec').onclick = () => { state.mediaRecorder?.stop(); $('voiceRecorder').classList.add('hidden'); };
 $('sendRec').onclick = async () => {
   state.mediaRecorder?.stop();
   $('voiceRecorder').classList.add('hidden');
@@ -290,59 +230,40 @@ $('sendRec').onclick = async () => {
   }, 300);
 };
 
-// ---------- CALLS (WebRTC) ----------
+// --- WebRTC Calls ---
 $('callBtn').onclick = () => startCall(false);
 $('videoBtn').onclick = () => startCall(true);
 
 async function startCall(withVideo) {
   try {
-    state.localStream = await navigator.mediaDevices.getUserMedia({
-      audio: true,
-      video: withVideo,
-    });
+    state.localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: withVideo });
     $('localVideo').srcObject = state.localStream;
     $('callOverlay').classList.remove('hidden');
 
-    // Signal all present peers
     const present = state.channel.presenceState();
     for (const peerId of Object.keys(present)) {
       if (peerId === state.userId) continue;
       await createPeer(peerId, true, withVideo);
     }
-  } catch (err) {
-    toast('Cannot start call');
-    endCall();
-  }
+  } catch { toast('Cannot start call'); endCall(); }
 }
 
 async function createPeer(remoteId, initiator, withVideo) {
   const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
   state.peers.set(remoteId, pc);
-
   state.localStream.getTracks().forEach(t => pc.addTrack(t, state.localStream));
 
   pc.onicecandidate = (e) => {
     if (e.candidate) {
-      state.channel.send({
-        type: 'broadcast',
-        event: 'rtc-ice',
-        payload: { from: state.userId, to: remoteId, candidate: e.candidate },
-      });
+      state.channel.send({ type: 'broadcast', event: 'rtc-ice', payload: { from: state.userId, to: remoteId, candidate: e.candidate } });
     }
   };
-  pc.ontrack = (e) => {
-    state.remoteStream = e.streams[0];
-    $('remoteVideo').srcObject = state.remoteStream;
-  };
+  pc.ontrack = (e) => { $('remoteVideo').srcObject = e.streams[0]; };
 
   if (initiator) {
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
-    state.channel.send({
-      type: 'broadcast',
-      event: 'rtc-offer',
-      payload: { from: state.userId, to: remoteId, sdp: offer, video: withVideo },
-    });
+    state.channel.send({ type: 'broadcast', event: 'rtc-offer', payload: { from: state.userId, to: remoteId, sdp: offer, video: withVideo } });
   }
   return pc;
 }
@@ -353,11 +274,7 @@ async function handleOffer({ payload }) {
   await pc.setRemoteDescription(payload.sdp);
   const answer = await pc.createAnswer();
   await pc.setLocalDescription(answer);
-  state.channel.send({
-    type: 'broadcast',
-    event: 'rtc-answer',
-    payload: { from: state.userId, to: payload.from, sdp: answer },
-  });
+  state.channel.send({ type: 'broadcast', event: 'rtc-answer', payload: { from: state.userId, to: payload.from, sdp: answer } });
 }
 
 async function handleAnswer({ payload }) {
@@ -386,11 +303,7 @@ $('camBtn').onclick = () => {
   $('camBtn').textContent = t.enabled ? '📹' : '📷';
 };
 $('hangupBtn').onclick = () => {
-  state.channel.send({
-    type: 'broadcast',
-    event: 'rtc-hangup',
-    payload: { from: state.userId },
-  });
+  state.channel.send({ type: 'broadcast', event: 'rtc-hangup', payload: { from: state.userId } });
   endCall();
 };
 
@@ -399,7 +312,6 @@ function endCall() {
   state.peers.clear();
   state.localStream?.getTracks().forEach(t => t.stop());
   state.localStream = null;
-  state.remoteStream = null;
   $('callOverlay').classList.add('hidden');
 }
 
@@ -408,21 +320,13 @@ function cleanupPeer(peerId) {
   if (pc) { pc.close(); state.peers.delete(peerId); }
 }
 
-// ---------- MISC ----------
+// --- Misc ---
 $('copyLinkBtn').onclick = () => {
-  const url = location.origin + '?room=' + state.roomId;
-  navigator.clipboard.writeText(url);
-  toast('Invite link copied');
+  navigator.clipboard.writeText(location.origin + '?room=' + state.roomId);
+  toast('Invite link copied!');
 };
 $('leaveBtn').onclick = () => {
   state.channel?.unsubscribe();
   endCall();
   location.href = location.origin;
 };
-
-// Close emoji picker on outside click
-document.addEventListener('click', (e) => {
-  if (!e.target.closest('#emojiPicker') && !e.target.closest('#emojiBtn')) {
-    picker.classList.add('hidden');
-  }
-});
