@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#000000" />
+  <title>♞ Pitch Black — Anonymous Chat</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E♞%3C/text%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <!-- ============ LANDING SCREEN ============ -->
+  <section id="landing" class="screen active">
+    <div class="brand">
+      <div class="logo">♞</div>
+      <h1>Pitch Black</h1>
+      <p class="tagline">Anonymous. Encrypted. Ephemeral.</p>
+    </div>
+
+    <div class="card">
+      <label for="roomInput">Room code</label>
+      <input id="roomInput" type="text" placeholder="e.g. midnight-42" autocomplete="off" spellcheck="false" />
+      <button id="joinBtn" class="btn primary">Join Room</button>
+      <div class="divider"><span>or</span></div>
+      <button id="createBtn" class="btn ghost">Create New Room</button>
+    </div>
+
+    <footer class="foot">No accounts. No traces. Just talk.</footer>
+  </section>
+
+  <!-- ============ CHAT SCREEN ============ -->
+  <section id="chat" class="screen">
+    <header class="topbar">
+      <div class="topbar-left">
+        <div class="logo small">♞</div>
+        <div>
+          <div class="room-name" id="roomName">Room</div>
+          <div class="room-meta"><span id="onlineCount">0</span> online</div>
+        </div>
+      </div>
+      <div class="topbar-right">
+        <button id="callBtn" class="icon-btn" title="Start call">📞</button>
+        <button id="videoBtn" class="icon-btn" title="Video call">🎥</button>
+        <button id="copyLinkBtn" class="icon-btn" title="Copy invite link">🔗</button>
+        <button id="leaveBtn" class="icon-btn" title="Leave">⏻</button>
+      </div>
+    </header>
+
+    <main class="messages" id="messages"></main>
+
+    <!-- Call overlay -->
+    <div id="callOverlay" class="call-overlay hidden">
+      <video id="remoteVideo" autoplay playsinline></video>
+      <video id="localVideo" autoplay playsinline muted></video>
+      <div class="call-controls">
+        <button id="muteBtn" class="call-btn">🎤</button>
+        <button id="camBtn" class="call-btn">📹</button>
+        <button id="hangupBtn" class="call-btn danger">📴</button>
+      </div>
+    </div>
+
+    <footer class="composer">
+      <button id="emojiBtn" class="icon-btn" title="Emoji">😊</button>
+      <button id="attachBtn" class="icon-btn" title="Attach">📎</button>
+      <button id="voiceBtn" class="icon-btn" title="Voice note">🎙️</button>
+      <input id="fileInput" type="file" accept="image/*,video/*" hidden />
+      <textarea id="messageInput" placeholder="Type a message..." rows="1"></textarea>
+      <button id="sendBtn" class="icon-btn send" title="Send">➤</button>
+      <div id="emojiPicker" class="emoji-picker hidden"></div>
+      <div id="voiceRecorder" class="voice-recorder hidden">
+        <span class="rec-dot"></span>
+        <span id="recTime">0:00</span>
+        <button id="cancelRec" class="mini-btn">Cancel</button>
+        <button id="sendRec" class="mini-btn primary">Send</button>
+      </div>
+    </footer>
+  </section>
+
+  <!-- Toast -->
+  <div id="toast" class="toast hidden"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="script.js"></script>
+</body>
+</html>
