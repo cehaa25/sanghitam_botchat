@@ -1,47 +1,59 @@
-# 🏰 Anonymous Chat — Pitch Black
+# ♞ Pitch Black — Anonymous Chat
 
-A modern, minimal, anonymous chat app with a pure-black theme and a chess knight logo.
+A minimal, pitch-black anonymous chat with emojis, voice notes, photos, videos, and WebRTC calls.
 
 ## ✨ Features
+- 🔒 Anonymous — no accounts, random aliases
+- 💬 Realtime text chat (Supabase Realtime WebSockets)
+- 😊 Emoji picker
+- 📷 Photos & 🎬 Videos (Supabase Storage)
+- 🎤 Voice notes (MediaRecorder + Storage)
+- 📞 Audio & 🎥 Video calls (WebRTC P2P)
+- 🔗 Shareable room links
+- 🖤 Pure black theme
 
-- 🔒 **Anonymous** — no login, random identity per session
-- 🖤 **Pitch Black theme** — pure black UI, easy on the eyes
-- ♞ **Chess knight logo** — custom SVG
-- 💬 **Text messages** with emoji picker
-- 🎙 **Voice notes** (record & send)
-- 📷 **Photos & videos** (drag / attach)
-- 📞 **Audio & video calls** (WebRTC peer-to-peer)
-- 🌐 **WebSocket** real-time messaging + signaling
+## 🚀 Deploy in 10 minutes
 
-## 🚀 Local Setup
+### 1. Supabase
+1. Create a project at https://supabase.com
+2. Open **SQL Editor** → paste & run `supabase-schema.sql`
+3. Copy your **Project URL** and **anon public key** from *Settings → API*
 
+### 2. GitHub
 ```bash
-npm install
-npm start
-# Open http://localhost:3000
+git init
+git add .
+git commit -m "Initial commit"
+git branch -M main
+git remote add origin https://github.com/YOU/anonymous-chat.git
+git push -u origin main
 ```
 
-## 🌍 Deploy to Vercel
+### 3. Vercel
+1. Go to https://vercel.com → **New Project** → import your GitHub repo
+2. Set framework: **Other**
+3. Add env vars (optional — anon key is public-safe):
+   - `SUPABASE_URL`
+   - `SUPABASE_ANON_KEY`
+4. Replace the two placeholders in `script.js`:
+   ```js
+   const SUPABASE_URL = 'https://YOUR-PROJECT.supabase.co';
+   const SUPABASE_ANON_KEY = 'your-anon-key';
+   ```
+5. **Deploy**
 
-1. Push this folder to a GitHub repository.
-2. Go to [vercel.com](https://vercel.com) → **New Project** → import your repo.
-3. Framework Preset: **Other**
-4. Build Command: *(leave empty)*
-5. Output Directory: *(leave empty)*
-6. Click **Deploy**.
+### 4. Share
+Open `https://your-app.vercel.app?room=midnight-42` — anyone with the link joins instantly.
 
-> ⚠️ WebSockets on Vercel require a **Pro** plan. For free-tier WebSocket support, deploy `server.js` to **Railway**, **Render**, or **Fly.io** instead, and update `WS_URL` in `index.html` to point to that server.
+## 🔐 Security notes
+- Supabase anon key is **designed to be public** — protect it with RLS
+- RLS policies allow open read/insert on `messages` and `chat-media` bucket
+- For stricter isolation, add a room-token system or hash-based room access
+- WebRTC is peer-to-peer; only signaling passes through Supabase
+- No server-side logs of message content (messages are client-rendered)
 
-## 🐙 Deploy to GitHub Pages (frontend only)
-
-If you only want the frontend hosted (and run the server elsewhere):
-
-1. Push to GitHub.
-2. Repo → **Settings → Pages** → Source: **main** branch, folder `/root`.
-3. Edit `WS_URL` in `index.html` to point to your deployed WebSocket server.
-
-## 🧪 Notes
-
-- Calls use **WebRTC** with public Google STUN servers.
-- Media files are limited to **8 MB** (configurable in `index.html`).
-- All data is ephemeral — no server-side storage.
+## 🛠 Tech
+- Vanilla HTML/CSS/JS (no build step)
+- Supabase Realtime (WebSockets) + Storage
+- WebRTC for calls
+- Deployed on Vercel as static site
