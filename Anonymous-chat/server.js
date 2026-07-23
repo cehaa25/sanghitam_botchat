@@ -1,110 +1,79 @@
-// WebSocket + WebRTC signaling server
-// Runs locally with `node server.js` or on Vercel via serverless function
-const http = require('http');
-const fs = require('fs');
-const path = require('path');
-const { WebSocketServer } = require('ws');
+// index.html (or your main JS file)
+import { createClient } from '@supabase/supabase-js'
 
-const PORT = process.env.PORT || 3000;
+// Initialize Supabase client
+const supabaseUrl = 'https://your-project.supabase.co' // Replace with your URL
+const supabaseKey = 'your-anon-key' // Replace with your ANON key
+const supabase = createClient(supabaseUrl, supabaseKey)
 
-// ---------- HTTP server (serves index.html locally) ----------
-const server = http.createServer((req, res) => {
-  if (req.url === '/' || req.url === '/index.html') {
-    const file = path.join(__dirname, 'index.html');
-    fs.readFile(file, (err, data) => {
-      if (err) { res.writeHead(500); res.end('Error'); return; }
-      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-      res.end(data);
-    });
-  } else {
-    res.writeHead(404);
-    res.end('Not found');
-  }
-});
-
-// ---------- WebSocket server ----------
-const wss = new WebSocketServer({ server });
-
-// rooms[roomName] = Map<clientId, { ws, name }>
-const rooms = new Map();
-
-function getRoom(name) {
-  if (!rooms.has(name)) rooms.set(name, new Map());
-  return rooms.get(name);
-}
-
-function broadcast(room, msg, exceptId) {
-  const r = getRoom(room);
-  const payload = JSON.stringify(msg);
-  for (const [id, client] of r) {
-    if (id !== exceptId && client.ws.readyState === 1) {
-      client.ws.send(payload);
+// Connect to a room channel (replace 'my-room' with dynamic room name)
+const roomName = 'my-room'
+const channel = supabase.channel(roomName, {
+  config: { 
+    broadcast: { self: true },
+    presence: { 
+      key: 'user_id' // Optional: for presence tracking
     }
   }
-}
+})
 
-function sendTo(room, toId, msg) {
-  const r = getRoom(room);
-  const client = r.get(toId);
-  if (client && client.ws.readyState === 1) {
-    client.ws.send(JSON.stringify(msg));
+// Join the channel
+channel.subscribe((status) => {
+  if (status === 'SUBSCRIBED') {
+    console.log(`Connected to room: ${roomName}`)
+    
+    // Send join message (optional)
+    channel.send({
+      type: 'broadcast',
+      event: 'join',
+      payload: { 
+        id: 'your-client-id', 
+        name: 'Your Name' 
+      }
+    })
   }
+})
+
+// Listen for messages
+channel.on('broadcast', { event: '*' }, (payload) => {
+  const { event, payload: data } = payload
+  
+  switch (event) {
+    case 'join':
+      // Handle new user joining
+      console.log(`User joined: ${data.name}`)
+      break
+      
+    case 'text':
+    case 'media':
+    case 'voice':
+      // Handle chat messages
+      console.log('Message:', data)
+      break
+      
+    case 'call-offer':
+      // Handle WebRTC offer
+      console.log('Call offer received:', data)
+      // Your WebRTC logic here
+      break
+      
+    case 'call-answer':
+    case 'call-ice':
+    case 'call-end':
+      // Handle targeted signaling
+      console.log('Signaling:', data)
+      break
+  }
+})
+
+// Send messages through channel
+function sendMessage(type, data) {
+  channel.send({
+    type: 'broadcast',
+    event: type,
+    payload: data
+  })
 }
 
-wss.on('connection', ws => {
-  let clientId = null;
-  let clientRoom = null;
-  let clientName = null;
-
-  ws.on('message', raw => {
-    let data;
-    try { data = JSON.parse(raw); } catch { return; }
-
-    switch (data.type) {
-      case 'join': {
-        clientId = data.id;
-        clientRoom = data.room;
-        clientName = data.name;
-        const room = getRoom(clientRoom);
-        room.set(clientId, { ws, name: clientName });
-        // Notify others
-        broadcast(clientRoom, { type: 'join', name: clientName, id: clientId }, clientId);
-        break;
-      }
-      case 'text':
-      case 'media':
-      case 'voice': {
-        // Broadcast to room
-        broadcast(data.room, data);
-        break;
-      }
-      case 'call-offer': {
-        // Broadcast offer to room (first free peer picks it up)
-        broadcast(data.room, data, data.from);
-        break;
-      }
-      case 'call-answer':
-      case 'call-ice':
-      case 'call-end': {
-        // Targeted delivery
-        sendTo(data.room, data.to, data);
-        break;
-      }
-    }
-  });
-
-  ws.on('close', () => {
-    if (clientId && clientRoom) {
-      const room = getRoom(clientRoom);
-      room.delete(clientId);
-      broadcast(clientRoom, { type: 'leave', name: clientName, id: clientId });
-      if (room.size === 0) rooms.delete(clientRoom);
-    }
-  });
-
-  ws.on('error', err => console.error('ws error', err.message));
-});
-
-server.listen(PORT, () => {
-  console.log(`🏰 Pitch Black Chat running on http://localhost:${PORT}`);
-});
+// Example usage:
+// sendMessage('call-offer', { from: 'user1', to: 'user2', sdp: '...' })
