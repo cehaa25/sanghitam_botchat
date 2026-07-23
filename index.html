@@ -2,13 +2,15 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="theme-color" content="#000000" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#0a0a0a" />
   <title>♞ Pitch Black — Anonymous Chat</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E♞%3C/text%3E%3C/svg%3E" />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
+
   <!-- ============ LANDING SCREEN ============ -->
   <section id="landing" class="screen active">
     <div class="brand">
@@ -18,11 +20,13 @@
     </div>
 
     <div class="card">
-      <label for="roomInput">Room code</label>
+      <label for="roomInput">Room Code</label>
       <input id="roomInput" type="text" placeholder="e.g. midnight-42" autocomplete="off" spellcheck="false" />
-      <button id="joinBtn" class="btn primary">Join Room</button>
+      <button id="joinBtn" class="btn btn-primary">Join Room</button>
+      
       <div class="divider"><span>or</span></div>
-      <button id="createBtn" class="btn ghost">Create New Room</button>
+      
+      <button id="createBtn" class="btn btn-secondary">Create New Room</button>
     </div>
 
     <footer class="foot">No accounts. No traces. Just talk.</footer>
@@ -30,25 +34,23 @@
 
   <!-- ============ CHAT SCREEN ============ -->
   <section id="chat" class="screen">
-    <header class="topbar">
-      <div class="topbar-left">
-        <div class="logo small">♞</div>
-        <div>
-          <div class="room-name" id="roomName">Room</div>
-          <div class="room-meta"><span id="onlineCount">0</span> online</div>
-        </div>
+    <header class="chat-header">
+      <div class="room-info">
+        <h2 id="roomName">Room</h2>
+        <span class="status-online"><span id="onlineCount">0</span> online</span>
       </div>
-      <div class="topbar-right">
-        <button id="callBtn" class="icon-btn" title="Start call">📞</button>
-        <button id="videoBtn" class="icon-btn" title="Video call">🎥</button>
-        <button id="copyLinkBtn" class="icon-btn" title="Copy invite link">🔗</button>
-        <button id="leaveBtn" class="icon-btn" title="Leave">⏻</button>
+      <div class="chat-actions">
+        <button id="callBtn" class="icon-btn" title="Audio Call">📞</button>
+        <button id="videoBtn" class="icon-btn" title="Video Call">🎥</button>
+        <button id="copyLinkBtn" class="icon-btn" title="Copy Invite Link">🔗</button>
+        <button id="leaveBtn" class="icon-btn" title="Leave Room">⏻</button>
       </div>
     </header>
 
     <main class="messages" id="messages"></main>
+    <div id="typingIndicator" class="typing-indicator"></div>
 
-    <!-- Call overlay -->
+    <!-- Call Overlay -->
     <div id="callOverlay" class="call-overlay hidden">
       <video id="remoteVideo" autoplay playsinline></video>
       <video id="localVideo" autoplay playsinline muted></video>
@@ -59,14 +61,20 @@
       </div>
     </div>
 
+    <!-- Composer -->
     <footer class="composer">
-      <button id="emojiBtn" class="icon-btn" title="Emoji">😊</button>
-      <button id="attachBtn" class="icon-btn" title="Attach">📎</button>
-      <button id="voiceBtn" class="icon-btn" title="Voice note">🎙️</button>
+      <button id="emojiBtn" class="icon-btn sm" title="Emoji">😊</button>
+      <button id="attachBtn" class="icon-btn sm" title="Attach File">📎</button>
+      <button id="voiceBtn" class="icon-btn sm" title="Voice Note">🎙️</button>
       <input id="fileInput" type="file" accept="image/*,video/*" hidden />
+      
       <textarea id="messageInput" placeholder="Type a message..." rows="1"></textarea>
-      <button id="sendBtn" class="icon-btn send" title="Send">➤</button>
+      <button id="sendBtn" class="send-btn" title="Send">➤</button>
+
+      <!-- Emoji Picker -->
       <div id="emojiPicker" class="emoji-picker hidden"></div>
+      
+      <!-- Voice Recorder UI -->
       <div id="voiceRecorder" class="voice-recorder hidden">
         <span class="rec-dot"></span>
         <span id="recTime">0:00</span>
@@ -76,9 +84,10 @@
     </footer>
   </section>
 
-  <!-- Toast -->
+  <!-- Toast Notification -->
   <div id="toast" class="toast hidden"></div>
 
+  <!-- Supabase JS SDK -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="script.js"></script>
 </body>
